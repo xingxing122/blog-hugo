@@ -4,7 +4,6 @@ date: 2019-03-26T08:59:33+08:00
 draft: false  
 categories: ["kubernetes"]
 tags: ["kubernetes"]
-
 ---
 
  编译kubernetes 所需要的二进制文件和镜像
@@ -29,7 +28,7 @@ tags: ["kubernetes"]
    ​     
     编译二进制  
    ​     
-       
+   ​    
 
 ```bash
 cd  kubernetes  
