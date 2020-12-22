@@ -21,7 +21,7 @@
 | Docker版本   |                                        |
 | k8s 版本     | 1.20                                   |
 | Pod 网段     | 172.168.0.0/16                         |
-| Service 网段 | 192.168.0.0/16                         |
+| Service 网段 | 192.168.0.0/12                         |
 | LB           | 用云端的alb                            |
 
 ### 2.基本信息配置
@@ -62,6 +62,7 @@ ntpdate time2.aliyun.com
 #### 2.5 设置limit
 
 ```bash
+# /etc/security/limits.conf
 * soft nofile 655360
 * hard nofile 131072
 * soft nproc 655350
@@ -146,11 +147,12 @@ net.ipv4.ip_conntrack_max = 65536
 net.ipv4.tcp_max_syn_backlog = 16384
 net.ipv4.tcp_timestamps = 0
 net.core.somaxconn = 16384
+# sysctl --system
 ```
 
 ### 3. 安装
 
-##### docker 安装
+#### 3.1 docker 安装
 
 ```bash
  yum remove docker \
@@ -172,9 +174,220 @@ net.core.somaxconn = 16384
  systemctl daemon-reload && systemctl enable --now docker 
 ```
 
-kubeadm 安装
+#### 3.2 kubeadm 安装
+
+```bash
+使用yum 安装 
+curl -o /etc/yum.repos.d/CentOS-Base.repo https://mirrors.aliyun.com/repo/Centos-7.repo
+yum install -y yum-utils device-mapper-persistent-data lvm2
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+EOF
+sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo
+
+yum list kubeadm.x86_64 --showduplicates
+yum list kubeadm.x86_64 --showduplicates | sort -r 
+yum install kubeadm -y 
+#自带安装一些依赖包
+```
+
+![image-20201222105650271](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-025650.png)
+
+#### 3.3 启动kubelet
+
+```bash
+systemctl daemon-reload
+systemctl enable --now kubelet
+## 初始化成功之后kubelet 会自动启动
+```
+
+#### 3.4 打印初始化文件
+
+```bash
+kubeadm config print init-defaults
+kubeadm config print init-defaults --component-configs KubeletConfiguration
+kubeadm config print init-defaults --component-configs KubeProxyConfiguration
+### 根据打印的文件可以修改为自己的
+```
+
+ kubeadm-init.yaml
+
+```yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 10.39.60.157
+  bindPort: 6443
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  name: k8s-master-01
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+---
+apiServer:
+  certSANs:
+  # api vip地址
+  - 10.39.60.221
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta2
+certificatesDir: /etc/kubernetes/pki
+clusterName: kubernetes
+#apiserver 的高可用vip地址
+controlPlaneEndpoint: 10.39.60.221:6443
+controllerManager: {}
+dns:
+  type: CoreDNS
+etcd:
+  local:
+   #etcd 存储的目录
+    dataDir: /var/lib/etcd
+imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+kind: ClusterConfiguration
+kubernetesVersion: v1.20.0
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 172.168.0.0/16
+  serviceSubnet: 192.168.0.0/12
+#默认调度
+scheduler: {} 
+```
+
+#### 3.5 下载镜像
+
+```bash
+kubeadm config images pull --config /root/kubeadm-init.yaml
+```
+
+#### 3.6 初始化集群
+
+```bash
+kubeadm init --config /root/kubeadm-init.yaml  --upload-certs
+### --upload-certs 会在加入master 节点的时候自动拷贝证书
+```
+
+#### 3.7 输出信息
+
+```bash
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+You can now join any number of the control-plane node running the following command on each as root:
+
+  kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
+    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db \
+    --control-plane --certificate-key 5abd57dba90cdafd7e7c457efc7fbb5593a8a276ecbdc65fb80fcf92cae2141b
+
+Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
+As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use
+"kubeadm init phase upload-certs --upload-certs" to reload certs afterward.
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
+    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db 
+    
+```
+
+```bash
+#--control-plane 为加入Master 节点 
+#token具有实效性，如果失效，可以创建
+kubeadm token create –print-join-command 创建新的 join token
+#故障解决
+由于各种原因会导致的失败
+kubeadm   reset 重新初始化  
+```
+
+#### 3.8 master1 上操作
+
+```bash
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+export KUBECONFIG=/etc/kubernetes/admin.conf
+# kubectl  get node   查看集群信息
+```
+
+![image-20201222151223082](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-071223.png)
+
+#### 3.9 查看组件
+
+```bash
+初始化安装的组件都在kube-system 空间
+```
+
+![image-20201222151409707](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-071410.png)
+
+####  3.10 加入其他Master 节点
+
+```bash
+#k8s-master-02 与k8s-master-03执行 
+kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
+    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db \
+    --control-plane --certificate-key 5abd57dba90cdafd7e7c457efc7fbb5593a8a276ecbdc65fb80fcf92cae2141b
+# 根据提示执行  
+        mkdir -p $HOME/.kube
+        sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+#### 3.11 验证Master 节点
+
+![image-20201222161132036](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-081135.png)
+
+#### 3.12 配置Master to node 
+
+```bash
+#这里主要是让master直接可以运行pods 
+#执行命令
+kubectl taint node node-name node-role.kubernetes.io/master-
+#禁止master运行pod 
+kubectl taint nodes node-name node-role.kubernetes.io/master=:NoSchedule
+#增加 ROLES 标签: 
+kubectl label nodes localhost node-role.kubernetes.io/node=
+#删除 ROLES 标签
+kubectl label nodes localhost node-role.kubernetes.io/node-
 
 ```
-将之前编译好的kubeadm二进制文件拷贝到
+
+#### 3.13 部署node 节点
+
+```bash
+# k8s-node1 上执行
+kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef     --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db 
 ```
+
+#### 3.14 网络组件安装
+
+kubernetes 常见的网络组件有calico   flannel,  我选择calico 网络组件  
+
+[calico 官网安装文档](https://docs.projectcalico.org/getting-started/kubernetes/quickstart)
+
+
 
