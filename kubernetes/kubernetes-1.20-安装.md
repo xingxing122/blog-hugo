@@ -374,6 +374,9 @@ kubectl label nodes localhost node-role.kubernetes.io/node=
 #删除 ROLES 标签
 kubectl label nodes localhost node-role.kubernetes.io/node-
 
+#cordns 可以根据节点数进行调整
+kubectl scale deploy/coredns --replicas=3 -n kube-system  
+#增加副本数
 ```
 
 #### 3.13 部署node 节点
@@ -387,7 +390,182 @@ kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef     --discovery-t
 
 kubernetes 常见的网络组件有calico   flannel,  我选择calico 网络组件  
 
-[calico 官网安装文档](https://docs.projectcalico.org/getting-started/kubernetes/quickstart)
+[calico 官网安装文档](https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises#install-calico-with-etcd-datastore)
 
+****calico 文件修改, 使用calico 3.17 版本
 
+```bash
+etcd-ca: `cat /etc/kubernetes/pki/etcd/ca.crt | base64 | tr -d '\n'`
+etcd-cert: `cat /etc/kubernetes/pki/etcd/server.crt | base64 | tr -d '\n'`
+etcd-key: `cat /etc/kubernetes/pki/etcd/server.key | base64 | tr -d '\n'`
+
+etcd_endpoints: "https://10.39.60.153:2379,https://10.39.60.154:2379,https://10.39.60.157:2379"
+  
+etcd_ca: "/calico-secrets/etcd-ca"
+etcd_cert: "/calico-secrets/etcd-cert"
+etcd_key: "/calico-secrets/etcd-key"
+
+veth_mtu: "1340"
+#青云的网络需要配置MTU为1340，其他网络根据情况默认即可
+   - name: CALICO_IPV4POOL_CIDR
+     value: "172.168.0.0/16"  #pod 的网段
+```
+
+##### 故障解决
+
+```bash
+2020-12-24 03:24:27.407 [INFO][1] main.go 88: Loaded configuration from environment config=&config.Config{LogLevel:"info", WorkloadEndpointWorkers:1, ProfileWorkers:1, PolicyWorkers:1, NodeWorkers:1, Kubeconfig:"", DatastoreType:"etcdv3"}
+2020-12-24 03:24:27.408 [FATAL][1] main.go 101: Failed to start error=failed to build Calico client: could not initialize etcdv3 client: open /calico-secrets/etcd-cert: permission denied
+```
+
+##### calico 3.17.1 版本最低权限是0040，而不是0400 
+
+```bash
+  volumes:
+    # Mount in the etcd TLS secrets with mode 400.
+    # See https://kubernetes.io/docs/concepts/configuration/secret/
+    - name: etcd-certs
+      secret:
+        secretName: calico-etcd-secrets
+        defaultMode: 0040 #默认是0400，修改为0040即可，问题就解决了
+```
+##### 验证
+
+![image-20201224150817511](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-24-070822.png)
+
+#### 3.15 Metrics Server部署
+
+[官网文档参考](https://github.com/kubernetes-sigs/metrics-server)
+
+```bash
+#下载到本地
+wget https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+
+vim  components.yaml
+......................
+containers:
+      - args:
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        image: k8s.gcr.io/metrics-server:v0.4.1   #修改为阿里云或者自己本地拉取的
+        imagePullPolicy: IfNotPresent
+        ### 添加下面几行
+        command:
+          - /metrics-server
+          - --kubelet-preferred-address-types=InternalIP,Hostname,Internaldns,ExternalDNS,ExternalIP
+          - --kubelet-insecure-tls
+#因为镜像需要科学上网拉取，可以先把镜像pull下来，然后修改镜像地址 
+[root@k8s-master-01 opt]# kubectl  apply -f components.yaml
+serviceaccount/metrics-server created
+clusterrole.rbac.authorization.k8s.io/system:aggregated-metrics-reader created
+clusterrole.rbac.authorization.k8s.io/system:metrics-server created
+rolebinding.rbac.authorization.k8s.io/metrics-server-auth-reader created
+clusterrolebinding.rbac.authorization.k8s.io/metrics-server:system:auth-delegator created
+clusterrolebinding.rbac.authorization.k8s.io/system:metrics-server created
+service/metrics-server created
+deployment.apps/metrics-server created
+apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io created
+```
+
+##### 验证
+
+```bash
+[root@k8s-master-01 opt]# kubectl  top  node
+NAME            CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+k8s-master-01   157m         3%     2188Mi          38%
+k8s-master-02   195m         4%     1910Mi          33%
+k8s-master-03   142m         3%     1985Mi          34%
+k8s-node1       98m          2%     1044Mi          13%
+
+#查看pod 的资源使用
+kubectl top pods -n kube-system
+```
+
+#### 3.16 部署dashboard 
+
+[参考文档](https://github.com/kubernetes/dashboard)
+
+```bash
+wget  https://raw.githubusercontent.com/kubernetes/dashboard/v2.1.0/aio/deploy/recommended.yaml  
+# 修改recommended.yaml 
+## 注释掉Dashboard  Secret，不然后面访问网页不安全，证书过期 
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  labels:
+#    k8s-app: kubernetes-dashboard
+#  name: kubernetes-dashboard-certs
+#  namespace: kubernetes-dashboard
+#type: Opaque
+
+#将type: targetPort  修改为 type: NodePort  38000
+
+[root@k8s-master-01 opt]# kubectl  apply -f recommended.yaml
+namespace/kubernetes-dashboard unchanged
+serviceaccount/kubernetes-dashboard unchanged
+service/kubernetes-dashboard unchanged
+secret/kubernetes-dashboard-csrf unchanged
+secret/kubernetes-dashboard-key-holder unchanged
+configmap/kubernetes-dashboard-settings unchanged
+role.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
+clusterrole.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
+rolebinding.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
+clusterrolebinding.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
+deployment.apps/kubernetes-dashboard configured
+service/dashboard-metrics-scraper unchanged
+deployment.apps/dashboard-metrics-scraper unchanged
+```
+
+![image-20201225152931570](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-25-072935.png)
+
+###### 生成新的secret 
+
+```bash
+mkdir key && cd key
+kubectl create  namespace kubernetes-dashboard
+openssl genrsa -out dashboard.key 2048
+openssl req -new -out dashboard.csr -key dashboard.key -subj '/CN=10.39.60.221'
+openssl x509 -req -in dashboard.csr -signkey dashboard.key -out dashboard.crt
+kubectl create secret generic kubernetes-dashboard-certs --from-file=dashboard.key --from-file=dashboard.crt -n kubernetes-dashboard
+```
+
+##### 设置权限文件
+
+[官网文档](https://github.com/kubernetes/dashboard/blob/master/docs/user/access-control/creating-sample-user.md)
+
+****admin-user.yaml
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kube-system
+```
+
+****admin-user-role-binding.yaml
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admin-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: admin-user
+  namespace: kube-system
+```
+
+****部署权限文件
+
+```bash
+kubectl create -f admin-user.yaml  
+kubectl create -f admin-user-role-binding.yaml
+```
 
