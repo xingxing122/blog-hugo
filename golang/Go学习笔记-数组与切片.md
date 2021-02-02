@@ -252,5 +252,40 @@ func main(){
 
 #### 2.4 修改切片
 
+```go
+package main
 
+import "fmt"
+
+func main(){
+      s :=[]string{"A","B","C","D","E","F","G"}
+      t :=[]string{"K","L","M","N"}
+      u :=[]string{"m","n","o","p","q","r"}
+
+      s =append(s,"h","i","j")
+      s =append(s,t...)
+      s =append(s,u[2:5]...)
+      b :=[]byte{'U','V'}
+      letters := "WXY"
+      b = append(b,letters...)
+      fmt.Printf("%v\n %s\n",s,b)
+
+
+}
+```
+
+#### 2.5 删除切片
+
+```go
+package main
+
+import "fmt"
+
+func main(){
+      s :=[]string{"A","B","C","D","E","F","G"}
+  s =s[2:]  // 从开始处删除s[:2]子切片
+      fmt.Println(s)
+
+}
+```
 
