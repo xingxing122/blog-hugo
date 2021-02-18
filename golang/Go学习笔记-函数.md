@@ -18,7 +18,7 @@ tags: [golang]
 语法
 
 ```go
-func  函数名称(参数) [返回值]{
+func  函数名称(参数) [返回值类型]{
         函数体
 }
 ```
@@ -45,13 +45,54 @@ func  add(a int,b int)int{
 	return  a  + b  //return  关键字用来向函数调用返回结果
 }
 
-
 func  main(){
 	// 调用函数,函数名称(参数[实参])
 	sysHello()
 	sayHi("xingxing")
 	c := add(4,3 )
     fmt.Println(c)
+}
+
+package main
+
+import (
+      "fmt"
+)
+
+func  sayHello(){
+      fmt.Println("hello")
+}
+
+func add(a,b int) int{
+      return a + b
+}
+
+//返回多个值
+func op(a,b int)(int,int,int,int){
+      return  a + b, a - b , a * b, a/b
+}
+
+// 命名返回值
+func opv2(a,b int)(sum int, sub int,mul int, div int){
+      sum  = a + b
+      sub  = a - b
+      mul  = a * b
+      div  = a /b
+      return
+}
+
+
+func main(){
+      sayHello()
+      add(1,2)
+      c := add(3,4)
+      fmt.Println(c)
+      fmt.Println(op(4,2))
+      a,b,c,d :=op(8,2)
+      fmt.Println("a=",a,"b=",b,"c=",c,"d=",d)
+
+      fmt.Println(opv2(3,2))
+
 }
 ```
 
