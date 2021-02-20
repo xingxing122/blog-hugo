@@ -123,3 +123,64 @@ func main(){
 }
 ```
 
+#### 3 汉诺塔算法(递归)
+
+```go
+package main
+
+import "fmt"
+
+func  tower(a,b,c string,layer int){
+   if  layer ==1 {
+      fmt.Println(a,"->",c)
+      return
+   }
+   tower(a,c,b,layer-1)
+   fmt.Println(a,"->",c)
+   tower(b,a,c,layer-1)
+}
+
+func main() {
+  tower("A","B","C",3)
+
+}
+```
+
+#### 4 冒泡
+
+```go
+package main
+
+import "fmt"
+
+func bubble(nums []int){
+      for j := 0;j<len(nums)-1;j++{
+            for i :=0 ; i<len(nums)-1-j;i++{
+                  if nums[i] > nums[i+1] {
+                        nums[i],nums[i+1]=nums[i+1],nums[i]
+                  }
+            }
+      }
+      fmt.Println(nums)
+
+}
+
+func main() {
+      nums :=[]int{5,4,3,2}
+      fmt.Println(nums)
+      nums =[]int{100,90,88,70,1000,100001}
+      bubble(nums)
+
+}
+```
+
+
+
+
+
+
+
+
+
+
+
