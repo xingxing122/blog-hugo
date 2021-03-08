@@ -75,3 +75,20 @@ Leader 收到ReadIndex 请求时，为防止脑裂等异常场景，会向Flower
 C节点会等待，直到状态机应用索引(applied index)大于Leader 的已提交索引时(committed index)然后去通知读请求，数据已赶上Leader，你可以去状态机中访问数据
 ```
 
+#### Leader选举
+
+```bash
+当etcd server 收到client 发起的put hello 写请求后，KV 模块会向Raft 模块提交一个put 提案，我们知道只有集群Leader 才能处理写提案，如果此集群中无Leader，整个请求就会超时 
+
+首先在Raft 协议中它定义了集群中如下节点状态，任何时刻，每个节点肯定处于其中一个状态：
+
+Follower， 跟随者，同步从Leader 收到的日志，etcd 启动的时候默认为此状态：
+Candidate，竞选者，可以发起Leader 选举
+Leader， 集群领导者，唯一性，拥有同步日志的的特权，需定时广播心跳给Follower 节点，以维持领导者身份
+
+当Follwer 节点接收到Leader 节点心跳信息超时后，它会转成Candidate 节点，并发起竞选Leader 投票，若获得集群多数节点的支持后，它就可转变成Leader 节点
+
+```
+
+
+
