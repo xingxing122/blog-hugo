@@ -114,7 +114,7 @@ test.yaml
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata: 
-  namespace: kube-system 
+  namespace: kube-system   
   name: test 
 rules:
 - apiGroups: ["","app","extensions"]  #"" 空字符串，表示核心API 群
@@ -171,11 +171,12 @@ metadata:
   namespace: kube-system  
 subjects:
 - kind: User
-  name: test
+  name: test      # name 是不区分大小写的
   apiGroup: ""
 roleRef: 
-  kind: Role 
-  name: test     # 刚才创建Role的名字    
+# "roleRef" 指定与某Role 或ClusterRole 的绑定关系
+  kind: Role     # 此字段必须是Role 或者CLusterRole 
+  name: test     #  此字段要必须与你要绑定的Role 或者ClusterRole 名称匹配
   apiGroup: ”“
 ```
 
@@ -186,6 +187,22 @@ roleRef:
 测试访问，test-context 指定的namespace 是kube-system 
 
 ![image-20210312101312926](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-12-021315.png)
+
+集群角色绑定中的角色只能是集群角色，用于进行集群级别或者对所有命名空间都生效的授权。下面的例子允许test 组
+
+RoleBinding 也可以引用ClusterRole, 以将对应ClusterRole中定义的访问权限授予RoleBinding 所在名字空间资源。这种引用使得你可以跨整个集群定义一组通用的角色，之后在多个名字空间中复用 
+
+例子:
+
+![image-20210315173912117](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-15-093915.png)
+
+
+
+
+
+
+
+
 
 #### Service  Account的授权管理
 
