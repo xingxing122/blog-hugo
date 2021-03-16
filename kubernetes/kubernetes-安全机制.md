@@ -135,29 +135,7 @@ versb: 对资源对象的操作方法列表，例如 get、awtch、list、delete
 
 创建role之后，需要test账号与 testRole 进行绑定，就需要创建Rolebinding
 
-##### 2)ClusterRole(集群角色)
-
-集群角色除了具有和角色一致的命名空间内资源的管理能力，因其集群级别的范围，还可以用于以下特殊元素的授权。
-
-集群范围的资源，例如node 
-
-非资源型路径，例如 ”/healthz“
-
-包含全部命名空间的资源，例如pods(kubectl  get pods  --all-namespaces这样的操作授权)
-
-下面的集群角色可以让用户有权访问任意一个或所有命名空间的secrets(视其绑定方式而定)
-
-```yaml
-kind: ClusterRole 
-apiVersion: rbac.authorization.k8s.io/v1
-metadata: 
-rules:
-- apiGroups: [""]
-  resources: ["secrets"]
-  werbs: ["get","watch","list"]
-```
-
-##### 3)Rolebinding(角色绑定)
+##### 2)Rolebinding(角色绑定)
 
 角色绑定或集群绑定用来把一个角色绑定到一个目标上，绑定目标可以是User(用户)、Group(组)或者Service Account。使用RoleBinding为某个命名空间授权，使用ClusterRoleBinding 为集群范围内授权.
 
@@ -188,25 +166,29 @@ roleRef:
 
 ![image-20210312101312926](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-12-021315.png)
 
-集群角色绑定中的角色只能是集群角色，用于进行集群级别或者对所有命名空间都生效的授权。下面的例子允许test 组
+注意: Role与RoleBinding 对象都是namespace 对象，它们对权限的限制规则仅在它们的namespace 内有效，roleRef 也只能引用当前namespace 里的role 对象
 
-RoleBinding 也可以引用ClusterRole, 以将对应ClusterRole中定义的访问权限授予RoleBinding 所在名字空间资源。这种引用使得你可以跨整个集群定义一组通用的角色，之后在多个名字空间中复用 
+##### 3)ClusterRole(集群角色)
 
-例子:
+集群角色除了具有和角色一致的命名空间内资源的管理能力，因其集群级别的范围，还可以用于以下特殊元素的授权。
 
-![image-20210315173912117](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-15-093915.png)
+集群范围的资源，例如node 
+
+非资源型路径，例如 ”/healthz“
+
+包含全部命名空间的资源，例如pods(kubectl  get pods  --all-namespaces这样的操作授权)
+
+创建dave 用户
+
+```bash
+openssl genrsa -out cluster.key 2048
+openssl req -new -key cluster.key  -out cluster.csr -subj "/CN=test/0=devops"
+openssl x509 -req -in cluster.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key  -CAcreateserial -out cluster.crt -days 500
+kubectl config set-credentials cluster --client-certificate=cluster.crt --client-key=cluster.key
+kubectl config set-context cluster-context --cluster=kubernetes --namespace=kube-system --user=cluster
+```
 
 
-
-
-
-
-
-
-
-#### Service  Account的授权管理
-
-默认的RBAC 策略为控制平台组件、节点和控制器授予有限范围的权限，但是除kube-system外的Service Account 是没有任何权限的(除了所有认证用户都具有的discovery权限)
 
 
 
