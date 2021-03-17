@@ -178,21 +178,57 @@ roleRef:
 
 包含全部命名空间的资源，例如pods(kubectl  get pods  --all-namespaces这样的操作授权)
 
-创建dave 用户
+##### 创建xing 用户
 
 ```bash
-openssl genrsa -out cluster.key 2048
-openssl req -new -key cluster.key  -out cluster.csr -subj "/CN=test/0=devops"
-openssl x509 -req -in cluster.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key  -CAcreateserial -out cluster.crt -days 500
-kubectl config set-credentials cluster --client-certificate=cluster.crt --client-key=cluster.key
-kubectl config set-context cluster-context --cluster=kubernetes --namespace=kube-system --user=cluster
+openssl genrsa -out xing.key 2048
+openssl req -new -key xing.key  -out xing.csr -subj "/CN=xing/0=xing"
+openssl x509 -req -in xing.csr -CA /etc/kubernetes/pki/ca.crt -CAkey /etc/kubernetes/pki/ca.key  -CAcreateserial -out xing.crt -days 500
+kubectl config set-credentials xing --client-certificate=xing.crt --client-key=xing.key
+kubectl config set-context xing-context --cluster=kubernetes --namespace=kube-system --user=xing
 ```
 
+##### 创建Clusterrole
 
+```yaml
+cat cluster-xing.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: xing-clusterrole
+rules:
 
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get","watch","list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get","list","watch"]
+```
 
+##### 创建ClusterRoleBinding
 
+```yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: xing-clusterrolebinding
+subjects:
+- kind: User
+  name: xing
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: xing-clusterrole
+  apiGroup: rbac.authorization.k8s.io
+```
 
+##### 测试
+
+![image-20210317111232440](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-17-031232.png)
 
 
 
