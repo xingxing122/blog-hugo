@@ -230,21 +230,194 @@ roleRef:
 
 ![image-20210317111232440](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-17-031232.png)
 
+##### Service Account 授权管理
 
+默认的RBAC 策略为控制平台组件、节点和控制器授予有限范围的权限，但是出kube-system 外的Service Account 是没有任何权限。 
 
+这就要求用户为Service Account赋予所需的权限。细粒度的角色分配能够提高安全性，但也会提高管理成本。粗放的授权方式可能会给Service Account 多余的权限，但更易于管理。 
 
+首先，需要定义一个Service Account 
 
+##### 创建service account 
 
+```yaml
+#serviceaccount.yaml 
+apiVersion: v1 
+kind: ServiceAccount 
+metadata:  
+  namespace: kube-system  # serviceaccount 创建在了kube-system 下
+  name: abc    # service account 名字
+```
 
+##### 创建cluster-role
 
+```yaml
+cluster-role.yaml 
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata: 
+  name: abc
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get","list","watch"]
+```
 
+##### 创建ClusterRole-namesapce
 
+编写cluster-server.yaml的yaml 文件，为ServiceAccount 分配权限: 
 
+```yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cr-namespace-abc
+rules: 
+- apiGroups:
+  - ""
+  resources: 
+  - namespaces/status
+  - namespaces 
+  verbs: 
+  - get 
+  - list  
+  - watch 
+```
 
+```yaml
+kubectl apply -f serviceaccount.yaml
+kubectl apply -f cluster-role.yaml
+kubectl apply -f cluster-server.yaml
+```
 
+##### 绑定角色
 
+对sa和集群角色建立绑定关系
 
+```yaml
+kubectl create rolebinding abc  --clusterrole=abc --serviceaccount=kube-system:abc --namespace=kube-system
+#--clusterrole=abc 名字与上面创建cluster-role 名字一致
+#--serviceaccount=kube-system:abc  所在的namespace空间与serviceaccount名字
+#--namespace=kube-system 授权的namespace 
+```
 
+##### 查看sa与
 
+```yaml
+ kubectl  get sa -n kube-system abc -o yaml
+ #获取secrets 名字
+ kubectl  get  secrets abc-token-fpkl2  -o yaml
+ #获取ca与secrets的token 
+ token= <token内容>
+ echo $token|base64 -d  # 解码
+```
 
+##### 客户端config配置文件
 
+config 文件在家目录的.kube/config 
+
+```yaml
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://xxxx:6443
+    certificate-authority-data:  #ca认证
+  name: abc
+users:
+- name: "abc"
+  user:
+    token:  # 这里的token 需要base64 解码
+contexts:
+- context:
+    cluster: abc
+    user: "abc"
+  name: abc
+preferences: {}
+current-context: abc
+```
+
+![image-20210318145215863](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-18-065218.png)
+
+##### 用户授权
+
+创建用户cluster-sa 的serviceaccount 
+
+```yaml
+#cat sa.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: kube-system
+  name: cluster-sa
+```
+
+##### 创建role
+
+```yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: kube-system
+  name: cluster-role
+   # 在这里定义role 的名字
+rules:
+- apiGroups: ["","app","extensions"]
+  resources: ["pods","deployments","replicasets","configmaps"]
+  verbs: ["get","watch","list","create","update","delete"]
+```
+
+##### 绑定roleBinding 
+
+```yaml
+cat role-binding.yaml
+
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cluster-rolebinding
+  namespace: kube-system
+subjects:
+- kind: ServiceAccount
+  name: cluster-sa
+  namespace: kube-system
+roleRef:
+  kind: Role
+  name: cluster-role
+  apiGroup: rbac.authorization.k8s.io
+```
+
+##### 客户端配置与验证
+
+```yaml
+kubectl  get sa -n kube-system  cluster-sa -o yaml
+#获取secrets 
+ kubectl  get  secrets -n kube-system   cluster-sa-token-wxlwn -o yaml
+ token=*****
+ echo $token|base64  -d
+```
+
+##### config
+
+```yaml
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://xxxxx:6443
+    certificate-authority-data: # ca证书文件
+  name: cluster-sa
+users:
+- name: "cluster-sa"
+  user:
+    token: #解压后的token
+contexts:
+- context:
+    cluster: cluster-sa
+    user: "cluster-sa"
+  name: cluster-sa
+preferences: {}
+current-context: cluster-sa
+```
+
+![image-20210318161146705](https://xing-blog.oss-cn-beijing.aliyuncs.com/2021-03-18-081157.png)

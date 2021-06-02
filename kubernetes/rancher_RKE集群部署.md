@@ -1,4 +1,8 @@
 ---
+
+
+
+
 title: "Rancher_RKE集群部署"
 date: 2020-07-22T09:52:34+08:00
 draft: false  
@@ -30,8 +34,6 @@ Rancher  RKE集群的安装
 
 3. 安装RKE 
 
-4. 
-
    [下载RKE]:https://github.com/rancher/rke/releases
 
    ```bash
@@ -44,8 +46,60 @@ Rancher  RKE集群的安装
 
    rke config  来生成这个文件
 
-   ```bash
+   ```yaml
    rke config
+   
+   [+] Cluster Level SSH Private Key Path [~/.ssh/id_rsa]: 
+   [+] Number of Hosts [1]: 3
+   [+] SSH Address of host (1) [none]: 10.39.15.23
+   [+] SSH Port of host (1) [22]: 
+   [+] SSH Private Key Path of host (10.39.15.23) [none]: 
+   [-] You have entered empty SSH key path, trying fetch from SSH key parameter
+   [+] SSH Private Key of host (10.39.15.23) [none]: 
+   [-] You have entered empty SSH key, defaulting to cluster level SSH key: ~/.ssh/id_rsa
+   [+] SSH User of host (10.39.15.23) [ubuntu]: root
+   [+] Is host (10.39.15.23) a Control Plane host (y/n)? [y]: y
+   [+] Is host (10.39.15.23) a Worker host (y/n)? [n]: y
+   [+] Is host (10.39.15.23) an etcd host (y/n)? [n]: y
+   [+] Override Hostname of host (10.39.15.23) [none]: 
+   [+] Internal IP of host (10.39.15.23) [none]: 
+   [+] Docker socket path on host (10.39.15.23) [/var/run/docker.sock]: 
+   [+] SSH Address of host (2) [none]: 10.39.15.24
+   [+] SSH Port of host (2) [22]: 
+   [+] SSH Private Key Path of host (10.39.15.24) [none]: 
+   [-] You have entered empty SSH key path, trying fetch from SSH key parameter
+   [+] SSH Private Key of host (10.39.15.24) [none]: 
+   [-] You have entered empty SSH key, defaulting to cluster level SSH key: ~/.ssh/id_rsa
+   [+] SSH User of host (10.39.15.24) [ubuntu]: root
+   [+] Is host (10.39.15.24) a Control Plane host (y/n)? [y]: y
+   [+] Is host (10.39.15.24) a Worker host (y/n)? [n]: y
+   [+] Is host (10.39.15.24) an etcd host (y/n)? [n]: y
+   [+] Override Hostname of host (10.39.15.24) [none]: 
+   [+] Internal IP of host (10.39.15.24) [none]: 
+   [+] Docker socket path on host (10.39.15.24) [/var/run/docker.sock]: 
+   [+] SSH Address of host (3) [none]: 10.39.15.25
+   [+] SSH Port of host (3) [22]: 
+   [+] SSH Private Key Path of host (10.39.15.25) [none]: 
+   [-] You have entered empty SSH key path, trying fetch from SSH key parameter
+   [+] SSH Private Key of host (10.39.15.25) [none]: 
+   [-] You have entered empty SSH key, defaulting to cluster level SSH key: ~/.ssh/id_rsa
+   [+] SSH User of host (10.39.15.25) [ubuntu]: root
+   [+] Is host (10.39.15.25) a Control Plane host (y/n)? [y]: y
+   [+] Is host (10.39.15.25) a Worker host (y/n)? [n]: y
+   [+] Is host (10.39.15.25) an etcd host (y/n)? [n]: y
+   [+] Override Hostname of host (10.39.15.25) [none]: 
+   [+] Internal IP of host (10.39.15.25) [none]: 
+   [+] Docker socket path on host (10.39.15.25) [/var/run/docker.sock]: 
+   [+] Network Plugin Type (flannel, calico, weave, canal, aci) [canal]: calico
+   [+] Authentication Strategy [x509]: 
+   [+] Authorization Mode (rbac, none) [rbac]: none  
+   [+] Kubernetes Docker image [rancher/hyperkube:v1.20.5-rancher1]: 
+   [+] Cluster domain [cluster.local]: 
+   [+] Service Cluster IP Range [10.43.0.0/16]: 192.168.0.0/16
+   [+] Enable PodSecurityPolicy [n]: 
+   [+] Cluster Network CIDR [10.42.0.0/16]: 172.16.0.0/16
+   [+] Cluster DNS Service IP [10.43.0.10]: 
+   [+] Add addon manifest URLs or YAML files [no]: 
    ```
 
    cluster.yml 生成之后就可以执行
@@ -53,6 +107,7 @@ Rancher  RKE集群的安装
    ```bash
    rke up  #来部署kubernetes 集群
    export KUBECONFIG=$(pwd)/kube_config_cluster.yml  #rke up 执行完毕使用这个命令
+   #将kube_config_cluster.yml 文件拷贝到$HOME/.kube/config 
    [root@i-3lhxok9k ~]# kubectl get nodes                               
    NAME         STATUS   ROLES                      AGE   VERSION
    10.39.12.2   Ready    controlplane,etcd,worker   17h   v1.18.6
