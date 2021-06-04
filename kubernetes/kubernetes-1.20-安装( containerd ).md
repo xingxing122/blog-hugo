@@ -18,7 +18,7 @@
 | 信息         | 备注                                        |
 | ------------ | ------------------------------------------- |
 | 系统版本     | debian  Linux k8s-master-01 4.19.0-12-amd64 |
-| Docker版本   |                                             |
+| Docker版本   | 无                                          |
 | k8s 版本     | 1.20                                        |
 | Pod 网段     | 172.168.0.0/16                              |
 | Service 网段 | 192.168.0.0/12                              |
@@ -143,6 +143,8 @@ sudo systemctl restart containerd
   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
     SystemdCgroup = true
 #重启
+vim  /etc/containerd/config.toml   
+
 sudo systemctl restart containerd
 
 ```
@@ -180,75 +182,26 @@ kubeadm config print init-defaults
 kubeadm config print init-defaults --component-configs KubeletConfiguration
 kubeadm config print init-defaults --component-configs KubeProxyConfiguration
 ### 根据打印的文件可以修改为自己的
+
+也可以使用
+kubeadm init \
+  --apiserver-advertise-address=10.39.60.175 \
+  --image-repository registry.aliyuncs.com/google_containers \
+  --kubernetes-version v1.20.0 \
+  --service-cidr=10.96.0.0/12 \
+  --pod-network-cidr=10.244.0.0/16 \
+  --control-plane-endpoint=10.39.60.221:6443 \
+  --ignore-preflight-errors=all
+  
+  
+  # --control-plane-endpoint 负载均衡的ip，如果不是集群可不写，
+  集群的配置信息会生成在kubectl -n kube-system get   cm kubeadm-config -oyaml 这里，方便查看,如果涉及到修改可能需要kubeadm  reset 重置集群 
 ```
 
- kubeadm-init.yaml
-
-```yaml
-apiVersion: kubeadm.k8s.io/v1beta2
-bootstrapTokens:
-- groups:
-  - system:bootstrappers:kubeadm:default-node-token
-  token: abcdef.0123456789abcdef
-  ttl: 24h0m0s
-  usages:
-  - signing
-  - authentication
-kind: InitConfiguration
-localAPIEndpoint:
-  advertiseAddress: 10.39.60.157
-  bindPort: 6443
-nodeRegistration:
-  criSocket: /var/run/dockershim.sock
-  name: k8s-master-01
-  taints:
-  - effect: NoSchedule
-    key: node-role.kubernetes.io/master
----
-apiServer:
-  certSANs:
-  # api vip地址
-  - 10.39.60.221
-  timeoutForControlPlane: 4m0s
-apiVersion: kubeadm.k8s.io/v1beta2
-certificatesDir: /etc/kubernetes/pki
-clusterName: kubernetes
-#apiserver 的高可用vip地址
-controlPlaneEndpoint: 10.39.60.221:6443
-controllerManager: {}
-dns:
-  type: CoreDNS
-etcd:
-  local:
-   #etcd 存储的目录
-    dataDir: /var/lib/etcd
-imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
-kind: ClusterConfiguration
-kubernetesVersion: v1.20.0
-networking:
-  dnsDomain: cluster.local
-  podSubnet: 172.168.0.0/16
-  serviceSubnet: 192.168.0.0/12
-#默认调度
-scheduler: {} 
-```
-
-#### 3.5 下载镜像
+#### 3.4 输出信息
 
 ```bash
-kubeadm config images pull --config /root/kubeadm-init.yaml
-```
 
-#### 3.6 初始化集群
-
-```bash
-kubeadm init --config /root/kubeadm-init.yaml  --upload-certs
-### --upload-certs 会在加入master 节点的时候自动拷贝证书
-```
-
-#### 3.7 输出信息
-
-```bash
 Your Kubernetes control-plane has initialized successfully!
 
 To start using your cluster, you need to run the following as a regular user:
@@ -264,21 +217,18 @@ Alternatively, if you are the root user, you can run:
 You should now deploy a pod network to the cluster.
 Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
   https://kubernetes.io/docs/concepts/cluster-administration/addons/
-You can now join any number of the control-plane node running the following command on each as root:
 
-  kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
-    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db \
-    --control-plane --certificate-key 5abd57dba90cdafd7e7c457efc7fbb5593a8a276ecbdc65fb80fcf92cae2141b
+You can now join any number of control-plane nodes by copying certificate authorities
+and service account keys on each node and then running the following as root:
 
-Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
-As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use
-"kubeadm init phase upload-certs --upload-certs" to reload certs afterward.
+  kubeadm join 10.39.60.221:6443 --token 05iqjt.mk4i4jijsq3t89mu \
+    --discovery-token-ca-cert-hash sha256:745f7ea4bad5e2f9a62157411a4c81e1eb3dccbcfca2a4e9547e8a8016f3824d \
+    --control-plane 
 
 Then you can join any number of worker nodes by running the following on each as root:
 
-kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
-    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db 
-    
+kubeadm join 10.39.60.221:6443 --token 05iqjt.mk4i4jijsq3t89mu \
+    --discovery-token-ca-cert-hash sha256:745f7ea4bad5e2f9a62157411a4c81e1eb3dccbcfca2a4e9547e8a8016f3824d 
 ```
 
 ```bash
@@ -300,32 +250,57 @@ export KUBECONFIG=/etc/kubernetes/admin.conf
 # kubectl  get node   查看集群信息
 ```
 
-![image-20201222151223082](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-071223.png)
+#### 3.9 安装calico
 
-#### 3.9 查看组件
+https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises
 
 ```bash
-初始化安装的组件都在kube-system 空间
+curl https://docs.projectcalico.org/manifests/calico-typha.yaml -o calico.yaml 
+#需要修改calico.yaml 中
+CALICO_IPV4POOL_CIDR 与kubeadm init 指定的  --pod-network-cidr 一致 
+kubectl apply -f calico.yaml 
 ```
-
-![image-20201222151409707](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-071410.png)
 
 ####  3.10 加入其他Master 节点
 
 ```bash
-#k8s-master-02 与k8s-master-03执行 
-kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef \
-    --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db \
-    --control-plane --certificate-key 5abd57dba90cdafd7e7c457efc7fbb5593a8a276ecbdc65fb80fcf92cae2141b
+#
+
 # 根据提示执行  
         mkdir -p $HOME/.kube
         sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
         sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
-#### 3.11 验证Master 节点
+#### 3.11 遇到的故障
 
-![image-20201222161132036](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-22-081135.png)
+```bash
+#故障一 
+root@k8s-master-02:~# kubeadm join 10.39.60.175:6443 --token  yjqd42.mimqzh2bczx4ck9w    --discovery-token-ca-cert-hash sha256:c7b8645c2263f4557a65eb53f9c076a6cf84dbdd4e94fa9a89ea07f671f9d53a     --control-plane --certificate-key a4a4df512944b2505a0f10320d7ea2d0857e335860977b57e0a1de48331a5e8f 
+[preflight] Running pre-flight checks
+        [WARNING SystemVerification]: missing optional cgroups: hugetlb
+[preflight] Reading configuration from the cluster...
+[preflight] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'
+error execution phase preflight: 
+One or more conditions for hosting a new control plane instance is not satisfied.
+
+unable to add a new control plane instance a cluster that doesn't have a stable controlPlaneEndpoint address
+
+Please ensure that:
+
+* The cluster has a stable controlPlaneEndpoint address.
+* The certificates that must be shared among control plane instances are provided.
+
+
+To see the stack trace of this error execute with --v=5 or higher
+
+# 解决
+# 在k8s-master01 上
+kubectl -n kube-system get cm kubeadm-config -o yaml 
+```
+
+
+
 
 #### 3.12 配置Master to node 
 
@@ -348,56 +323,12 @@ kubectl scale deploy/coredns --replicas=3 -n kube-system
 #### 3.13 部署node 节点
 
 ```bash
-# k8s-node1 上执行
-kubeadm join 10.39.60.221:6443 --token abcdef.0123456789abcdef     --discovery-token-ca-cert-hash sha256:aa12ea3319ceb1882f4ff7a6ef6fd71806d4a150d4e77db01dc3b9564f98e4db 
+
 ```
 
 #### 3.14 网络组件安装
 
-kubernetes 常见的网络组件有calico   flannel,  我选择calico 网络组件  
-
-[calico 官网安装文档](https://docs.projectcalico.org/getting-started/kubernetes/self-managed-onprem/onpremises#install-calico-with-etcd-datastore)
-
-****calico 文件修改, 使用calico 3.17 版本
-
-```bash
-etcd-ca: `cat /etc/kubernetes/pki/etcd/ca.crt | base64 | tr -d '\n'`
-etcd-cert: `cat /etc/kubernetes/pki/etcd/server.crt | base64 | tr -d '\n'`
-etcd-key: `cat /etc/kubernetes/pki/etcd/server.key | base64 | tr -d '\n'`
-
-etcd_endpoints: "https://10.39.60.153:2379,https://10.39.60.154:2379,https://10.39.60.157:2379"
-  
-etcd_ca: "/calico-secrets/etcd-ca"
-etcd_cert: "/calico-secrets/etcd-cert"
-etcd_key: "/calico-secrets/etcd-key"
-
-veth_mtu: "1340"
-#青云的网络需要配置MTU为1340，其他网络根据情况默认即可
-   - name: CALICO_IPV4POOL_CIDR
-     value: "172.168.0.0/16"  #pod 的网段
-```
-
-##### 故障解决
-
-```bash
-2020-12-24 03:24:27.407 [INFO][1] main.go 88: Loaded configuration from environment config=&config.Config{LogLevel:"info", WorkloadEndpointWorkers:1, ProfileWorkers:1, PolicyWorkers:1, NodeWorkers:1, Kubeconfig:"", DatastoreType:"etcdv3"}
-2020-12-24 03:24:27.408 [FATAL][1] main.go 101: Failed to start error=failed to build Calico client: could not initialize etcdv3 client: open /calico-secrets/etcd-cert: permission denied
-```
-
-##### calico 3.17.1 版本最低权限是0040，而不是0400 
-
-```bash
-  volumes:
-    # Mount in the etcd TLS secrets with mode 400.
-    # See https://kubernetes.io/docs/concepts/configuration/secret/
-    - name: etcd-certs
-      secret:
-        secretName: calico-etcd-secrets
-        defaultMode: 0040 #默认是0400，修改为0040即可，问题就解决了
-```
-##### 验证
-
-![image-20201224150817511](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-24-070822.png)
+#
 
 #### 3.15 Metrics Server部署
 
@@ -447,41 +378,6 @@ k8s-node1       98m          2%     1044Mi          13%
 
 #查看pod 的资源使用
 kubectl top pods -n kube-system
-```
-
-#### 3.16 部署dashboard 
-
-[参考文档](https://github.com/kubernetes/dashboard)
-
-```bash
-wget  https://raw.githubusercontent.com/kubernetes/dashboard/v2.1.0/aio/deploy/recommended.yaml  
-# 修改recommended.yaml 
-## 注释掉Dashboard  Secret，不然后面访问网页不安全，证书过期 
-#apiVersion: v1
-#kind: Secret
-#metadata:
-#  labels:
-#    k8s-app: kubernetes-dashboard
-#  name: kubernetes-dashboard-certs
-#  namespace: kubernetes-dashboard
-#type: Opaque
-
-#将type: targetPort  修改为 type: NodePort  38000
-
-[root@k8s-master-01 opt]# kubectl  apply -f recommended.yaml
-namespace/kubernetes-dashboard unchanged
-serviceaccount/kubernetes-dashboard unchanged
-service/kubernetes-dashboard unchanged
-secret/kubernetes-dashboard-csrf unchanged
-secret/kubernetes-dashboard-key-holder unchanged
-configmap/kubernetes-dashboard-settings unchanged
-role.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
-clusterrole.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
-rolebinding.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
-clusterrolebinding.rbac.authorization.k8s.io/kubernetes-dashboard unchanged
-deployment.apps/kubernetes-dashboard configured
-service/dashboard-metrics-scraper unchanged
-deployment.apps/dashboard-metrics-scraper unchanged
 ```
 
 ![image-20201225152931570](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-25-072935.png)
