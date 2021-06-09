@@ -320,23 +320,13 @@ kubectl scale deploy/coredns --replicas=3 -n kube-system
 #增加副本数
 ```
 
-#### 3.13 部署node 节点
-
-```bash
-
-```
-
-#### 3.14 网络组件安装
-
-#
-
 #### 3.15 Metrics Server部署
 
 [官网文档参考](https://github.com/kubernetes-sigs/metrics-server)
 
 ```bash
 #下载到本地
-wget https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+wget  https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.5.0/components.yaml
 
 vim  components.yaml
 ......................
@@ -346,13 +336,15 @@ containers:
         - --secure-port=4443
         - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
         - --kubelet-use-node-status-port
-        image: k8s.gcr.io/metrics-server:v0.4.1   #修改为阿里云或者自己本地拉取的
+        image: k8s.gcr.io/metrics-server:v0.5.0   #修改为阿里云或者自己本地拉取的
         imagePullPolicy: IfNotPresent
         ### 添加下面几行
         command:
           - /metrics-server
           - --kubelet-preferred-address-types=InternalIP,Hostname,Internaldns,ExternalDNS,ExternalIP
-          - --kubelet-insecure-tls
+          - --kubelet-insecure-tls   # 关闭kubelet认证 
+ #开启认证
+          - --requestheader-client-ca-file 
 #因为镜像需要科学上网拉取，可以先把镜像pull下来，然后修改镜像地址 
 [root@k8s-master-01 opt]# kubectl  apply -f components.yaml
 serviceaccount/metrics-server created
@@ -369,65 +361,58 @@ apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io created
 ##### 验证
 
 ```bash
-[root@k8s-master-01 opt]# kubectl  top  node
-NAME            CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
-k8s-master-01   157m         3%     2188Mi          38%
-k8s-master-02   195m         4%     1910Mi          33%
-k8s-master-03   142m         3%     1985Mi          34%
-k8s-node1       98m          2%     1044Mi          13%
+root@k8s-master-01:~# kubectl  top  node
+NAME            CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%   
+i-konvehyo      49m          1%     703Mi           12%       
+i-mz9wlzx3      45m          1%     832Mi           14%       
+k8s-master-01   243m         6%     1245Mi          21%       
+k8s-master-02   109m         2%     1192Mi          20%       
+k8s-master-03   103m         2%     1153Mi          19%     
 
 #查看pod 的资源使用
 kubectl top pods -n kube-system
 ```
 
-![image-20201225152931570](https://xing-blog.oss-cn-beijing.aliyuncs.com/2020-12-25-072935.png)
-
-###### 生成新的secret 
+部署kubernetes-dashboard 
 
 ```bash
-mkdir key && cd key
-kubectl create  namespace kubernetes-dashboard
-openssl genrsa -out dashboard.key 2048
-openssl req -new -out dashboard.csr -key dashboard.key -subj '/CN=10.39.60.221'
-openssl x509 -req -in dashboard.csr -signkey dashboard.key -out dashboard.crt
-kubectl create secret generic kubernetes-dashboard-certs --from-file=dashboard.key --from-file=dashboard.crt -n kubernetes-dashboard
+# 修改recommended.yaml 
+## 注释掉Dashboard  Secret，不然后面访问网页不安全，证书过期 
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  labels:
+#    k8s-app: kubernetes-dashboard
+#  name: kubernetes-dashboard-certs
+#  namespace: kubernetes-dashboard
+#type: Opaque
+
+#将type: targetPort  修改为 type: NodePort  38000
+
+root@k8s-master-01:~# kubectl  apply -f  recommended.yaml 
+namespace/kubernetes-dashboard created
+serviceaccount/kubernetes-dashboard created
+service/kubernetes-dashboard created
+secret/kubernetes-dashboard-certs created
+secret/kubernetes-dashboard-csrf created
+secret/kubernetes-dashboard-key-holder created
+configmap/kubernetes-dashboard-settings created
+role.rbac.authorization.k8s.io/kubernetes-dashboard created
+clusterrole.rbac.authorization.k8s.io/kubernetes-dashboard created
+rolebinding.rbac.authorization.k8s.io/kubernetes-dashboard created
+clusterrolebinding.rbac.authorization.k8s.io/kubernetes-dashboard created
+deployment.apps/kubernetes-dashboard created
+service/dashboard-metrics-scraper created
+deployment.apps/dashboard-metrics-scraper created
 ```
 
-##### 设置权限文件
-
-[官网文档](https://github.com/kubernetes/dashboard/blob/master/docs/user/access-control/creating-sample-user.md)
-
-****admin-user.yaml
-
-```yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: kube-system
-```
-
-****admin-user-role-binding.yaml
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: admin-user
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: admin-user
-  namespace: kube-system
-```
-
-****部署权限文件
+创建service  account 并绑定默认的cluster-admin 管理员集群角色
 
 ```bash
-kubectl create -f admin-user.yaml  
-kubectl create -f admin-user-role-binding.yaml
+kubectl create serviceaccount dashboard-admin -n kube-system
+
+kubectl create clusterrolebinding dashboard-admin --clusterrole=cluster-admin --serviceaccount=kube-system:dashboard-admin
+
+kubectl describe secrets -n kube-system $(kubectl -n kube-system get secret | awk '/dashboard-admin/{print $1}')
 ```
 
